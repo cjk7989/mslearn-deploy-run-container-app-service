@@ -25,6 +25,8 @@ namespace SampleWeb.Pages
         private readonly string cosmosDatabaseName = "testdb";
         private readonly string cosmosContainerName = "cosmostest";
 
+        private readonly string userIdentityId = Environment.GetEnvironmentVariable("MI_ID");
+
         private BlobServiceClient blobServiceClient;
         private BlobContainerClient blobContainerClient;
         private BlobClient blobClient;
@@ -80,16 +82,16 @@ namespace SampleWeb.Pages
             // ' storage blob data contributor' is required before using MSI
             try
             {
-                //blobServiceClient = new BlobServiceClient(
-                //    new Uri(storageAddress),
-                //    new ManagedIdentityCredential("6f60f59c-ca19-4715-a853-b822e9b97946")
-                //);
-
-                DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
                 blobServiceClient = new BlobServiceClient(
                     new Uri(storageAddress),
-                    defaultAzureCredential
-                    );
+                    new ManagedIdentityCredential(userIdentityId)
+                );
+
+                //DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
+                //blobServiceClient = new BlobServiceClient(
+                //    new Uri(storageAddress),
+                //    defaultAzureCredential
+                //    );
 
                 // Create blobContainerClient if not exists
                 blobContainerClient = blobServiceClient.GetBlobContainerClient(storageContainerName);
@@ -128,10 +130,15 @@ namespace SampleWeb.Pages
         {
             try
             {
-                DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
+                //DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
+                //cosmosClient = new CosmosClient(
+                //    cosmosEndpoint,
+                //    defaultAzureCredential
+                //);
+
                 cosmosClient = new CosmosClient(
                     cosmosEndpoint,
-                    defaultAzureCredential
+                    new ManagedIdentityCredential(userIdentityId)
                 );
 
                 // Create a database asynchronously if it doesn't already exist
