@@ -18,12 +18,12 @@ namespace SampleWeb.Pages
         private readonly ILogger<IndexModel> _logger;
 
         private readonly string storageAddress = Environment.GetEnvironmentVariable("CONTENT_STORAGE");
-        private readonly string storageContainerName = "mycontainer01";
-        private readonly string storageBlobName = "date.txt";
+        private readonly string storageContainerName = "testcontainer";
+        private readonly string storageBlobName = "storagetest.txt";
 
         private readonly string cosmosEndpoint = Environment.GetEnvironmentVariable("COSMOS_ENDPOINT");
-        private readonly string cosmosDatabaseName = "mycosmosdb01";
-        private readonly string cosmosContainerName = "date";
+        private readonly string cosmosDatabaseName = "testdb";
+        private readonly string cosmosContainerName = "cosmostest";
 
         private BlobServiceClient blobServiceClient;
         private BlobContainerClient blobContainerClient;
@@ -41,14 +41,55 @@ namespace SampleWeb.Pages
             _logger = logger;
         }
 
+        public void OnGet()
+        {
+            string domainName = Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME");
+            ViewData["Host"] = domainName;
+            if (string.IsNullOrEmpty(domainName))
+            {
+                ViewData["Site"] = "Sample Container";
+                ViewData["Host"] = "local or unknown";
+            }
+            else if (domainName.ToLower().Contains("msha"))
+            {
+                ViewData["Site"] = "Dedicated MSHA";
+            }
+            else if (domainName.ToLower().Contains("cds"))
+            {
+                ViewData["Site"] = "Dedicated CDS";
+            }
+            else
+            {
+                ViewData["Site"] = "Sample Container Web";
+            }
+
+            string sku = Environment.GetEnvironmentVariable("ENVIRONMENT_VERSION");
+
+            if (string.IsNullOrEmpty(sku))
+            {
+                ViewData["Sku"] = "Unknown";
+            }
+            else
+            {
+                ViewData["Sku"] = sku;
+            }
+        }
+
         public async Task<IActionResult> OnGetStorageAsync()
         {
+            // ' storage blob data contributor' is required before using MSI
             try
             {
+                //blobServiceClient = new BlobServiceClient(
+                //    new Uri(storageAddress),
+                //    new ManagedIdentityCredential("6f60f59c-ca19-4715-a853-b822e9b97946")
+                //);
+
+                DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
                 blobServiceClient = new BlobServiceClient(
                     new Uri(storageAddress),
-                    new ManagedIdentityCredential("6f60f59c-ca19-4715-a853-b822e9b97946")
-                );
+                    defaultAzureCredential
+                    );
 
                 // Create blobContainerClient if not exists
                 blobContainerClient = blobServiceClient.GetBlobContainerClient(storageContainerName);
@@ -65,7 +106,7 @@ namespace SampleWeb.Pages
                 }
 
                 // Write log to blob
-                string log = $"[{DateTime.Now}] This is a log message from {storageAddress}.\n";
+                string log = $"[{DateTime.Now}] This is a log message from {ViewData["Site"]}.\n";
                 await blobClient.UploadAsync(BinaryData.FromString(log), overwrite: true);
 
                 // Read log from blob
@@ -87,9 +128,10 @@ namespace SampleWeb.Pages
         {
             try
             {
+                DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
                 cosmosClient = new CosmosClient(
                     cosmosEndpoint,
-                    new ManagedIdentityCredential()
+                    defaultAzureCredential
                 );
 
                 // Create a database asynchronously if it doesn't already exist
@@ -105,23 +147,23 @@ namespace SampleWeb.Pages
                 );
 
                 // Generate a random product Id
-                string productId = Guid.NewGuid().ToString();
+                string productId = "test";
 
                 // Create an item
-                Product product = new Product
+                Log tempLog = new Log
                 {
-                    Id = productId,
-                    Category = "Current Date",
-                    Date = $"[{DateTime.Now}] This is a log message from {cosmosEndpoint}\n."
+                    id = productId,
+                    Category = cosmosEndpoint,
+                    Date = $"[{DateTime.Now}] This is a log message from {Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME")}\n."
                 };
 
                 // Insert to cosmosContainer
-                await cosmosContainer.CreateItemAsync(product, new PartitionKey(product.Category));
+                await cosmosContainer.UpsertItemAsync<Log>(tempLog);
 
                 // Read from cosmosContainer
-                Product result = await cosmosContainer.ReadItemAsync<Product>(productId, new PartitionKey(product.Category));
+                Log result = await cosmosContainer.ReadItemAsync<Log>(productId, new PartitionKey(tempLog.Category));
 
-                LogMessage = $"Created and read a new product: {result.Category}, {result.Date}\n";
+                LogMessage = $"Created and read a new log: {result.Category}, {result.Date}\n";
             }
             catch (Exception ex)
             {
@@ -132,9 +174,9 @@ namespace SampleWeb.Pages
         }
     }
 
-    public class Product
+    public class Log
     {
-        public string Id { get; set; }
+        public string id { get; set; }
         public string Category { get; set; }
         public string Date { get; set; }
     }
