@@ -9,6 +9,9 @@
     <p>This is a demo site for @ViewData["Site"].</p>
     <p>Site host - @ViewData["Host"].</p>
     <p>Site sku - @ViewData["Sku"].</p>
+    <p>Site identity -  @ViewData["UserAssignedClientId"]</p>
+    <p>Site config -  @ViewData["AdminStorageAccountConfigurationFilePath"]</p>
+    <p>Site cosmos -  @ViewData["CosmosConnectionString"]</p>
     <div style="width:100%; text-align:right;">
         <button id="read-write-storage" asp-page-handler="Storage" style="margin: 10px auto; margin-right: 30px;">Test Content Storage</button>
         <button id="read-write-cosmos" asp-page-handler="Cosmos" style="margin: 10px auto;">Test Cosmos DB</button>

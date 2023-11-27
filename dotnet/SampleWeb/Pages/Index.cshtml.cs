@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Azure;
 using Microsoft.Azure.Cosmos;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Policy;
 
 namespace SampleWeb.Pages
 {
@@ -17,15 +18,15 @@ namespace SampleWeb.Pages
     {
         private readonly ILogger<IndexModel> _logger;
 
-        private readonly string storageAddress = Environment.GetEnvironmentVariable("CONTENT_STORAGE");
+        private readonly string adminStorageAccountConfigurationFilePath = Environment.GetEnvironmentVariable("AdminStorageAccountConfigurationFilePath");
         private readonly string storageContainerName = "testcontainer";
         private readonly string storageBlobName = "storagetest.txt";
 
-        private readonly string cosmosEndpoint = Environment.GetEnvironmentVariable("COSMOS_ENDPOINT");
+        private readonly string cosmosEndpoint = Environment.GetEnvironmentVariable("CosmosConnectionString");
         private readonly string cosmosDatabaseName = "testdb";
         private readonly string cosmosContainerName = "cosmostest";
 
-        private readonly string userIdentityId = Environment.GetEnvironmentVariable("MI_ID");
+        private readonly string userIdentityId = Environment.GetEnvironmentVariable("UserAssignedClientId");
 
         private BlobServiceClient blobServiceClient;
         private BlobContainerClient blobContainerClient;
@@ -65,7 +66,7 @@ namespace SampleWeb.Pages
                 ViewData["Site"] = "Sample Container Web";
             }
 
-            string sku = Environment.GetEnvironmentVariable("ENVIRONMENT_VERSION");
+            string sku = Environment.GetEnvironmentVariable("IsDedicated");
 
             if (string.IsNullOrEmpty(sku))
             {
@@ -75,10 +76,19 @@ namespace SampleWeb.Pages
             {
                 ViewData["Sku"] = sku;
             }
+
+            string userAssignedIdentityId = Environment.GetEnvironmentVariable("UserAssignedClientId");
+            ViewData["UserAssignedClientId"] = userAssignedIdentityId;
+
+            ViewData["AdminStorageAccountConfigurationFilePath"] = adminStorageAccountConfigurationFilePath;
+            ViewData["CosmosConnectionString"] = Environment.GetEnvironmentVariable("CosmosConnectionString"); ;          
         }
 
         public async Task<IActionResult> OnGetStorageAsync()
         {
+            Uri uri1 = new Uri(adminStorageAccountConfigurationFilePath);
+            string storageAddress = uri1.GetLeftPart(UriPartial.Authority);
+
             // ' storage blob data contributor' is required before using MSI
             try
             {
