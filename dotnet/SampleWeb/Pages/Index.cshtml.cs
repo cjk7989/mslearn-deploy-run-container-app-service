@@ -23,8 +23,8 @@ namespace SampleWeb.Pages
         private readonly string storageBlobName = "storagetest.txt";
 
         private readonly string cosmosEndpoint = Environment.GetEnvironmentVariable("CosmosConnectionString");
-        private readonly string cosmosDatabaseName = "testdb";
-        private readonly string cosmosContainerName = "cosmostest";
+        private string cosmosDatabaseName = "dswadb";
+        private string cosmosContainerName = "cosmostest";
 
         private readonly string userIdentityId = Environment.GetEnvironmentVariable("UserAssignedClientId");
 
@@ -92,16 +92,23 @@ namespace SampleWeb.Pages
             // ' storage blob data contributor' is required before using MSI
             try
             {
-                blobServiceClient = new BlobServiceClient(
-                    new Uri(storageAddress),
-                    new ManagedIdentityCredential(userIdentityId)
-                );
-
-                //DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
-                //blobServiceClient = new BlobServiceClient(
-                //    new Uri(storageAddress),
-                //    defaultAzureCredential
-                //    );
+                var messageSuffix = " from using default credential.";
+                if (!string.IsNullOrEmpty(userIdentityId))
+                {
+                    blobServiceClient = new BlobServiceClient(
+                        new Uri(storageAddress),
+                        new ManagedIdentityCredential(userIdentityId)
+                    );
+                    messageSuffix = $" from using user assigned identity {userIdentityId}.";
+                }
+                else
+                {
+                    DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
+                    blobServiceClient = new BlobServiceClient(
+                        new Uri(storageAddress),
+                        defaultAzureCredential
+                        );
+                }
 
                 // Create blobContainerClient if not exists
                 blobContainerClient = blobServiceClient.GetBlobContainerClient(storageContainerName);
@@ -118,7 +125,7 @@ namespace SampleWeb.Pages
                 }
 
                 // Write log to blob
-                string log = $"[{DateTime.Now}] This is a log message from {ViewData["Site"]}.\n";
+                string log = $"[{DateTime.Now}] This is a log message from {ViewData["Site"]} and {messageSuffix}.\n";
                 await blobClient.UploadAsync(BinaryData.FromString(log), overwrite: true);
 
                 // Read log from blob
@@ -140,47 +147,71 @@ namespace SampleWeb.Pages
         {
             try
             {
-                //DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
-                //cosmosClient = new CosmosClient(
-                //    cosmosEndpoint,
-                //    defaultAzureCredential
-                //);
+                var messageSuffix = " from using default credential.";
+                string dbname = Environment.GetEnvironmentVariable("CosmosDatabaseName");
+                if (!string.IsNullOrEmpty(dbname))
+                {
+                    cosmosDatabaseName = dbname;
+                }
 
-                cosmosClient = new CosmosClient(
-                    cosmosEndpoint,
-                    new ManagedIdentityCredential(userIdentityId)
-                );
+                string containername = Environment.GetEnvironmentVariable("CosmosContainerName");
+                if (!string.IsNullOrEmpty(containername))
+                {
+                    cosmosContainerName = containername;
+                }
+
+                if (string.IsNullOrEmpty(userIdentityId))
+                {
+                    DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
+                    cosmosClient = new CosmosClient(
+                        cosmosEndpoint,
+                        defaultAzureCredential
+                    );
+                }
+                else
+                {
+
+                    cosmosClient = new CosmosClient(
+                        cosmosEndpoint,
+                        new ManagedIdentityCredential(userIdentityId)
+                    );
+                    messageSuffix = $" from using user assigned identity {userIdentityId}.";
+                }
 
                 // Create a database asynchronously if it doesn't already exist
-                cosmosDatabase = await cosmosClient.CreateDatabaseIfNotExistsAsync(
-                    id: cosmosDatabaseName
-                );
+                //cosmosDatabase = await cosmosClient.CreateDatabaseIfNotExistsAsync(
+                //    id: cosmosDatabaseName
+                //);
+
+                cosmosDatabase = cosmosClient.GetDatabase(cosmosDatabaseName);
 
                 // Create a container asynchronously if it doesn't already exist
-                cosmosContainer = await cosmosDatabase.CreateContainerIfNotExistsAsync(
-                    id: cosmosContainerName,
-                    partitionKeyPath: "/Category",
-                    throughput: 400
-                );
+                //cosmosContainer = await cosmosDatabase.CreateContainerIfNotExistsAsync(
+                //    id: cosmosContainerName,
+                //    partitionKeyPath: "/id",
+                //    throughput: 400
+                //);
+
+                cosmosContainer = cosmosDatabase.GetContainer(cosmosContainerName);
 
                 // Generate a random product Id
-                string productId = "test";
+                string productId = Guid.NewGuid().ToString();
 
                 // Create an item
                 Log tempLog = new Log
                 {
                     id = productId,
-                    Category = cosmosEndpoint,
-                    Date = $"[{DateTime.Now}] This is a log message from {Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME")}\n."
+                    Content =  $"[{DateTime.Now}] This is a log message from {ViewData["Site"]} and {messageSuffix}\n.",
+                    Date = DateTime.UtcNow.ToString(),
                 };
 
                 // Insert to cosmosContainer
                 await cosmosContainer.UpsertItemAsync<Log>(tempLog);
 
                 // Read from cosmosContainer
-                Log result = await cosmosContainer.ReadItemAsync<Log>(productId, new PartitionKey(tempLog.Category));
+                Log result = await cosmosContainer.ReadItemAsync<Log>(productId, new PartitionKey(productId));
 
-                LogMessage = $"Created and read a new log: {result.Category}, {result.Date}\n";
+                LogMessage = $"{result.Content}\n";
             }
             catch (Exception ex)
             {
@@ -194,7 +225,7 @@ namespace SampleWeb.Pages
     public class Log
     {
         public string id { get; set; }
-        public string Category { get; set; }
+        public string Content { get; set; }
         public string Date { get; set; }
     }
 }
